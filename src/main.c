@@ -5,10 +5,18 @@
 #include <regex.h>
 #include <libgen.h>
 
+const char* dangerous[] = {"strcpy","strcat","sprintf","vsprintf","gets","realpath","getwd","confstr",NULL};
+const char* warning[]   = {"strncpy","strncat","snprintf","vsnprintf",NULL};
+
+int is_dangerous(const char* f) {
+    for (int i = 0; dangerous[i]; i++) if (strcmp(f, dangerous[i]) == 0) return 2;
+    for (int i = 0; warning[i];   i++) if (strcmp(f, warning[i])   == 0) return 1;
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc < 2) return 1;
     regex_t re;
-    regcomp(&re, "\\bstrcpy[ \t]*\\(", REG_EXTENDED);
+    regcomp(&re, "\\b([a-zA-Z_][a-zA-Z0-9_]*)[ \t]*\\(", REG_EXTENDED);
 
     for (int i = 1; i < argc; i++) {
         FILE *f = fopen(argv[i], "r");
@@ -17,8 +25,17 @@ int main(int argc, char **argv) {
         int lineno = 0;
         while (getline(&line, &len, f) != -1) {
             lineno++;
-            if (regexec(&re, line, 0, NULL, 0) == 0) {
-                printf("\033[31mОПАСНО\033[0m: %s:%d → strcpy()\n", basename(argv[i]), lineno);
+            regmatch_t pm[2];
+            char *p = line;
+            while (regexec(&re, p, 2, pm, 0) == 0) {
+                char func[64] = {0};
+                int l = pm[1].rm_eo - pm[1].rm_so;
+                strncpy(func, p + pm[1].rm_so, l);
+                func[l] = '\0';
+                int lvl = is_dangerous(func);
+                if (lvl == 2) printf("\033[1;31mОПАСНО\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
+                else if (lvl == 1) printf("\033[1;33mПРЕДУПРЕЖДЕНИЕ\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
+                p += pm[0].rm_eo;
             }
         }
         free(line); fclose(f);
