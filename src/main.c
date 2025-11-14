@@ -4,6 +4,7 @@
 #include <string.h>
 #include <regex.h>
 #include <libgen.h>
+#include <sys/stat.h>
 
 const char* dangerous[] = {"strcpy","strcat","sprintf","vsprintf","gets","realpath","getwd","confstr",NULL};
 const char* warning[]   = {"strncpy","strncat","snprintf","vsnprintf",NULL};
@@ -12,6 +13,19 @@ int is_dangerous(const char* f) {
     for (int i = 0; dangerous[i]; i++) if (strcmp(f, dangerous[i]) == 0) return 2;
     for (int i = 0; warning[i];   i++) if (strcmp(f, warning[i])   == 0) return 1;
     return 0;
+}
+
+int skip_line(const char* line) {
+    int in_str = 0, in_comment = 0;
+    for (const char *s = line; *s; s++) {
+        if (*s == '"' && (s == line || *(s-1) != '\\'))
+            in_str = !in_str;
+        if (in_str) continue;
+        if (s[0] == '/' && s[1] == '/') return 1;
+        if (s[0] == '/' && s[1] == '*') in_comment = 1;
+        if (in_comment && s[0] == '*' && s[1] == '/') { in_comment = 0; s++; }
+    }
+    return in_comment;
 }
 
 int main(int argc, char **argv) {
@@ -25,6 +39,7 @@ int main(int argc, char **argv) {
         int lineno = 0;
         while (getline(&line, &len, f) != -1) {
             lineno++;
+            if (skip_line(line)) { free(line); line = NULL; continue; }
             regmatch_t pm[2];
             char *p = line;
             while (regexec(&re, p, 2, pm, 0) == 0) {
@@ -37,8 +52,9 @@ int main(int argc, char **argv) {
                 else if (lvl == 1) printf("\033[1;33mПРЕДУПРЕЖДЕНИЕ\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
                 p += pm[0].rm_eo;
             }
+            free(line); line = NULL;
         }
-        free(line); fclose(f);
+        fclose(f);
     }
     regfree(&re);
     return 0;
