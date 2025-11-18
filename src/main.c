@@ -4,6 +4,9 @@
 #include <string.h>
 #include <regex.h>
 #include <libgen.h>
+#include <syslog.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 
 const char* dangerous[] = {"strcpy","strcat","sprintf","vsprintf","gets","realpath","getwd","confstr",NULL};
@@ -29,6 +32,16 @@ int skip_line(const char* line) {
 }
 
 int main(int argc, char **argv) {
+    openlog("bufanalyzer", LOG_PID | LOG_NDELAY, LOG_USER);
+    syslog(LOG_INFO, "Запуск сканера UID=%d", getuid());
+
+    uid_t ruid, euid, suid;
+    getresuid(&ruid, &euid, &suid);
+    if (euid == 0) {
+        seteuid(ruid);
+        syslog(LOG_INFO, "Привилегии понижены до UID %d", ruid);
+    }
+
     regex_t re;
     regcomp(&re, "\\b([a-zA-Z_][a-zA-Z0-9_]*)[ \t]*\\(", REG_EXTENDED);
 
@@ -48,8 +61,13 @@ int main(int argc, char **argv) {
                 strncpy(func, p + pm[1].rm_so, l);
                 func[l] = '\0';
                 int lvl = is_dangerous(func);
-                if (lvl == 2) printf("\033[1;31mОПАСНО\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
-                else if (lvl == 1) printf("\033[1;33mПРЕДУПРЕЖДЕНИЕ\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
+                if (lvl == 2) {
+                    printf("\033[1;31mОПАСНО\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
+                    syslog(LOG_WARNING, "ОПАСНО %s:%d %s()", basename(argv[i]), lineno, func);
+                } else if (lvl == 1) {
+                    printf("\033[1;33mПРЕДУПРЕЖДЕНИЕ\033[0m: %s:%d → %s()\n", basename(argv[i]), lineno, func);
+                    syslog(LOG_NOTICE, "ПРЕДУПРЕЖДЕНИЕ %s:%d %s()", basename(argv[i]), lineno, func);
+                }
                 p += pm[0].rm_eo;
             }
             free(line); line = NULL;
@@ -57,5 +75,6 @@ int main(int argc, char **argv) {
         fclose(f);
     }
     regfree(&re);
+    closelog();
     return 0;
 }
