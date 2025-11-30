@@ -9,7 +9,7 @@ License:        GPLv3
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc make
-Requires:       inotify-tools systemd coreutils grep
+Requires:       inotify-tools systemd coreutils grep shadow-utils
 Requires(pre):  shadow-utils
 Requires(post): systemd
 Requires(preun): systemd
@@ -63,14 +63,11 @@ fi
 - Генерацию Markdown-отчётов об обнаруженных проблемах
 - Интеграцию с syslog и systemd
 
-%description -l ru
-Анализатор + демон для поиска функций, подверженных переполнению буфера.
-
-Проект включает:
-- Утилиту командной строки bufanalyzer для статического анализа C-кода
-- Системный демон bufanalyzer-daemon для мониторинга каталогов
-- Генерацию Markdown-отчётов об обнаруженных проблемах
-- Интеграцию с syslog и systemd
+Для работы требуется:
+- inotify-tools (для мониторинга файловой системы)
+- systemd (для работы службы)
+- coreutils и grep (для базовых операций)
+- shadow-utils (для управления пользователями)
 
 %prep
 %setup -q
@@ -91,6 +88,6 @@ install -m 644 config/bufanalyzer.conf %{buildroot}%{_sysconfdir}/bufanalyzer.co
 install -D -m 644 service/bufanalyzer.service %{buildroot}%{_unitdir}/bufanalyzer.service
 
 %changelog
-* Fri Nov 28 2025 Юлия Горбачева <yuliya.gorbacheva.06@list.ru> - 1.0-1
+* Sun Nov 30 2025 Юлия Горбачева <yuliya.gorbacheva.06@list.ru> - 1.0-1
 - Первая версия
-- Добавлены зависимости: inotify-tools, systemd, coreutils, grep
+- Добавлены зависимости: inotify-tools, systemd, coreutils, grep, shadow-utils
