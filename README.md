@@ -1,30 +1,23 @@
 # Buffer Overflow Analyzer
 
-Статический анализатор кода на языке C, выявляющий вызовы потенциально опасных функций (например, strcpy, gets, sprintf и др.).
-
-Проект включает:
-- Командную утилиту "bufanalyzer"
-- Системный демон "bufanalyzer-daemon"
-- Генерацию подробных Markdown-отчётов
-- Интеграцию с syslog и systemd
+Статический анализатор кода на языке C.
 
 ## Зависимости:
-- inotify-tools (для работы демона)
-- gcc, make (для сборки)
-- systemd (для работы службы)
+- **inotify-tools** - для мониторинга файловой системы демоном
+- **systemd** - для работы службы
+- **coreutils, grep** - для базовых операций
+- **shadow-utils** - для управления пользователями (автоматическое создание пользователя)
 
-После установки:
-- Демон будет следить за каталогом /var/lib/bufanalyzer/incoming
-- Отчёты сохраняются в /var/lib/bufanalyzer/reports
-- Пользователь user-12-31 создаётся автоматически
+## После установки:
+- Демон следит за /var/lib/bufanalyzer/incoming
+- Отчёты в /var/lib/bufanalyzer/reports
+- Пользователь user-12-31 создаётся автоматически через RPM
 
-Как использовать:
-- bufanalyzer your-file.c
-- sudo cp file.c /var/lib/bufanalyzer/incoming/
-- journalctl -u bufanalyzer.service -f
+## Как собрать RPM:
+make rpm
 
-Безопасность:
-- Программа bufanalyzer имеет setuid-бит
-- Демон работает от пользователя user-12-31
+## Как установить зависимости:
+make install-deps
 
-Разработчик: Юлия Горбачева <yuliya.gorbacheva.06@list.ru>
+## Разработчик:
+Юлия Горбачева <yuliya.gorbacheva.06@list.ru>
