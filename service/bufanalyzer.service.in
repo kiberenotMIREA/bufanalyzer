@@ -1,0 +1,18 @@
+[Unit]
+Description=Buffer Overflow Analyzer Daemon (@RUN_USER@)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bufanalyzer-daemon
+Restart=always
+RestartSec=5
+User=@RUN_USER@
+Group=@RUN_USER@
+WorkingDirectory=/var/lib/bufanalyzer
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=bufanalyzer
+
+[Install]
+WantedBy=multi-user.target

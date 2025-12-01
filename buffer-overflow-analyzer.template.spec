@@ -10,45 +10,54 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc make
 Requires:       inotify-tools systemd coreutils grep shadow-utils
-Requires(pre):  shadow-utils
-Requires(post): systemd
-Requires(preun): systemd
-Requires(postun): systemd
 
-# Отключаем генерацию debuginfo пакетов
+Provides: user(%{run_user})
+Provides: group(%{run_user})
+
 %define debug_package %{nil}
 
 %pre
-# Условное создание пользователя и группы
-# Используем 2>/dev/null для подавления ошибок если уже существуют
-getent group %{run_user} >/dev/null 2>&1 || groupadd -r %{run_user} 2>/dev/null || true
-getent passwd %{run_user} >/dev/null 2>&1 || useradd -r -g %{run_user} \
-  -d /var/lib/bufanalyzer -s /sbin/nologin \
-  -c "Buffer Analyzer User" %{run_user} 2>/dev/null || true
+# Проверяем существование пользователя перед установкой
+echo "Проверка пользователя %{run_user}..."
+if ! getent passwd %{run_user} >/dev/null 2>&1; then
+    echo "ОШИБКА: Пользователь %{run_user} не существует!" >&2
+    echo "Создайте пользователя перед установкой:" >&2
+    echo "  sudo groupadd -r %{run_user}" >&2
+    echo "  sudo useradd -r -g %{run_user} -d /var/lib/bufanalyzer -s /sbin/nologin %{run_user}" >&2
+    exit 1
+fi
+
+if ! getent group %{run_user} >/dev/null 2>&1; then
+    echo "ОШИБКА: Группа %{run_user} не существует!" >&2
+    exit 1
+fi
+echo "Пользователь %{run_user} найден, продолжаем установку..."
 
 %post
-# Создание рабочих каталогов и настройка прав
+# Создаём рабочие директории
 mkdir -p /var/lib/bufanalyzer/{incoming,reports}
 chown -R %{run_user}:%{run_user} /var/lib/bufanalyzer
 chmod 750 /var/lib/bufanalyzer/{incoming,reports}
+
 systemctl daemon-reload
 systemctl enable bufanalyzer.service >/dev/null 2>&1 || :
+systemctl start bufanalyzer.service >/dev/null 2>&1 || :
 
 %preun
-if [ \$1 -eq 0 ]; then
-    systemctl --no-reload disable bufanalyzer.service >/dev/null 2>&1 || :
+if [ $1 -eq 0 ]; then
+    systemctl disable --now bufanalyzer.service >/dev/null 2>&1 || :
 fi
 
 %postun
-if [ \$1 -ge 1 ]; then
+if [ $1 -ge 1 ]; then
     systemctl try-restart bufanalyzer.service >/dev/null 2>&1 || :
 fi
 
 %files
-%attr(4755,root,%{run_user}) %{_bindir}/bufanalyzer
-%{_bindir}/bufanalyzer-daemon
-%config(noreplace) %{_sysconfdir}/bufanalyzer.conf
-%{_unitdir}/bufanalyzer.service
+%attr(4755,root,%{run_user}) /usr/bin/bufanalyzer
+%attr(0755,root,root) /usr/bin/bufanalyzer-daemon
+%config(noreplace) /etc/bufanalyzer.conf
+/usr/lib/systemd/system/bufanalyzer.service
 %dir %attr(0750,%{run_user},%{run_user}) /var/lib/bufanalyzer
 %dir %attr(0750,%{run_user},%{run_user}) /var/lib/bufanalyzer/incoming
 %dir %attr(0750,%{run_user},%{run_user}) /var/lib/bufanalyzer/reports
@@ -57,18 +66,6 @@ fi
 %description
 Анализатор + демон для поиска функций, подверженных переполнению буфера.
 
-Проект включает:
-- Утилиту командной строки bufanalyzer для статического анализа C-кода
-- Системный демон bufanalyzer-daemon для мониторинга каталогов
-- Генерацию Markdown-отчётов об обнаруженных проблемах
-- Интеграцию с syslog и systemd
-
-Для работы требуется:
-- inotify-tools (для мониторинга файловой системы)
-- systemd (для работы службы)
-- coreutils и grep (для базовых операций)
-- shadow-utils (для управления пользователями)
-
 %prep
 %setup -q
 
@@ -76,18 +73,20 @@ fi
 make
 
 %install
-# Создать необходимые каталоги в buildroot
-mkdir -p %{buildroot}%{_bindir}
-mkdir -p %{buildroot}%{_sysconfdir}
-mkdir -p %{buildroot}%{_unitdir}
+mkdir -p %{buildroot}/usr/bin
+mkdir -p %{buildroot}/etc
+mkdir -p %{buildroot}/usr/lib/systemd/system
 mkdir -p %{buildroot}/var/lib/bufanalyzer/{incoming,reports}
 
-install -D -m 4755 bufanalyzer %{buildroot}%{_bindir}/bufanalyzer
-install -D -m 0755 bufanalyzer-daemon %{buildroot}%{_bindir}/bufanalyzer-daemon
-install -m 644 config/bufanalyzer.conf %{buildroot}%{_sysconfdir}/bufanalyzer.conf
-install -D -m 644 service/bufanalyzer.service %{buildroot}%{_unitdir}/bufanalyzer.service
+install -m 4755 bufanalyzer %{buildroot}/usr/bin/bufanalyzer
+install -m 0755 bufanalyzer-daemon %{buildroot}/usr/bin/bufanalyzer-daemon
+install -m 0644 config/bufanalyzer.conf %{buildroot}/etc/bufanalyzer.conf
+
+sed "s|@RUN_USER@|%{run_user}|g" service/bufanalyzer.service.in > \
+    %{buildroot}/usr/lib/systemd/system/bufanalyzer.service
 
 %changelog
-* Sun Nov 30 2025 Юлия Горбачева <yuliya.gorbacheva.06@list.ru> - 1.0-1
-- Первая версия
+* Mon Dec 01 2025 Юлия Горбачева <yuliya.gorbacheva.06@list.ru> - 1.0-1
+- Первая версия с проверкой существования пользователя
 - Добавлены зависимости: inotify-tools, systemd, coreutils, grep, shadow-utils
+- Исправлена обработка файлов в демоне (устранено дублирование)
