@@ -1,4 +1,4 @@
-%global run_user user-12-31
+%global run_user @RUN_AS_USER@
 
 Name:           buffer-overflow-analyzer
 Version:        1.0
@@ -17,21 +17,33 @@ Provides: group(%{run_user})
 %define debug_package %{nil}
 
 %pre
-# Проверяем существование пользователя перед установкой
-echo "Проверка пользователя %{run_user}..."
-if ! getent passwd %{run_user} >/dev/null 2>&1; then
-    echo "ОШИБКА: Пользователь %{run_user} не существует!" >&2
-    echo "Создайте пользователя перед установкой:" >&2
-    echo "  sudo groupadd -r %{run_user}" >&2
-    echo "  sudo useradd -r -g %{run_user} -d /var/lib/bufanalyzer -s /sbin/nologin %{run_user}" >&2
-    exit 1
+# Создаём группу и пользователя при необходимости
+echo "Проверка/создание пользователя и группы %{run_user}..."
+
+# Создаём группу, если не существует
+if ! getent group %{run_user} >/dev/null 2>&1; then
+    echo "Создаём группу %{run_user}..."
+    groupadd -r %{run_user} || {
+        echo "ОШИБКА: Не удалось создать группу %{run_user}" >&2
+        exit 1
+    }
 fi
 
-if ! getent group %{run_user} >/dev/null 2>&1; then
-    echo "ОШИБКА: Группа %{run_user} не существует!" >&2
-    exit 1
+# Создаём пользователя, если не существует
+if ! getent passwd %{run_user} >/dev/null 2>&1; then
+    echo "Создаём пользователя %{run_user}..."
+    useradd -r -g %{run_user} -d /var/lib/bufanalyzer -s /sbin/nologin %{run_user} || {
+        echo "ОШИБКА: Не удалось создать пользователя %{run_user}" >&2
+        exit 1
+    }
+    # При необходимости создаём домашнюю директорию
+    if [ ! -d /var/lib/bufanalyzer ]; then
+        mkdir -p /var/lib/bufanalyzer
+        chown %{run_user}:%{run_user} /var/lib/bufanalyzer
+    fi
 fi
-echo "Пользователь %{run_user} найден, продолжаем установку..."
+
+echo "Пользователь и группа %{run_user} готовы."
 
 %post
 # Создаём рабочие директории
