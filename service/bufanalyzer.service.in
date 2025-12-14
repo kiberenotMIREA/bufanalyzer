@@ -10,8 +10,8 @@ RestartSec=5
 User=@RUN_USER@
 Group=@RUN_USER@
 WorkingDirectory=/var/lib/bufanalyzer
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=bufanalyzer
 
 [Install]
